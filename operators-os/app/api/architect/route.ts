@@ -1,7 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextResponse } from 'next/server';
 
-// Initialize the Gemini client using the environment variable automatically
 const ai = new GoogleGenAI({});
 
 export async function POST(request: Request) {
@@ -12,14 +11,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    // Call Gemini 3 Flash to act as our Architect Agent
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `You are the Master Architect Agent for Operators OS. 
-      Analyze this user request and return a structured JSON blueprint of the sub-agents needed: "${prompt}"`,
+      Analyze this user request and return a structured JSON system blueprint.
+      
+      User Request: "${prompt}"`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'OBJECT',
+          properties: {
+            system_name: { type: 'STRING' },
+            architecture_type: { type: 'STRING' },
+            agents: {
+              type: 'ARRAY',
+              items: {
+                type: 'OBJECT',
+                properties: {
+                  agent_id: { type: 'STRING' },
+                  name: { type: 'STRING' },
+                  role: { type: 'STRING' },
+                  tools: { type: 'ARRAY', items: { type: 'STRING' } },
+                  outputs: { type: 'STRING' }
+                },
+                required: ['agent_id', 'name', 'role', 'tools', 'outputs']
+              }
+            }
+          },
+          required: ['system_name', 'architecture_type', 'agents']
+        }
+      }
     });
 
-    return NextResponse.json({ result: response.text });
+    return NextResponse.json({ result: JSON.parse(response.text || '{}') });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
