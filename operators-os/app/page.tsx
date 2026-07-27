@@ -35,12 +35,19 @@ export default function Home() {
       if (!session) {
         window.location.href = '/login';
       } else {
-        setUser(session.user);
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_pro')
+          .eq('id', session.user.id)
+          .single();
+          
+        setUser({ ...session.user, is_pro: profile?.is_pro || false });
       }
     };
     checkUser();
   }, []);
 
+  // EVERYONE can generate a blueprint (The Hook)
   const generateBlueprint = async () => {
     if (!prompt) return;
     setLoading(true);
@@ -59,7 +66,8 @@ export default function Home() {
         setBlueprint(data.result);
         const initialStatus: { [key: string]: boolean } = {};
         data.result.agents.forEach((a: Agent) => {
-          initialStatus[a.agent_id] = true;
+          // Default them to false so the user has to click to activate
+          initialStatus[a.agent_id] = false; 
         });
         setActiveAgents(initialStatus);
       }
@@ -70,12 +78,24 @@ export default function Home() {
     setLoading(false);
   };
 
+  // ONLY PRO USERS can activate agents
   const toggleAgent = (id: string) => {
+    if (!user?.is_pro) {
+      alert("Pro License Required ($49.99/mo) to activate and deploy live agents.");
+      return;
+    }
     setActiveAgents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // ONLY PRO USERS can save architectures
   const saveBlueprintToDb = async () => {
     if (!blueprint || !user) return;
+    
+    if (!user?.is_pro) {
+      alert("Pro License Required to secure architectures permanently.");
+      return;
+    }
+
     setIsSaving(true);
     setSaveStatus('Saving to database...');
 
@@ -110,7 +130,6 @@ export default function Home() {
     <div className="min-h-screen bg-black text-white p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-8 mt-6">
         
-        {/* TOP NAVIGATION & CONTROLS */}
         <div className="flex flex-wrap items-center justify-between border-b border-green-900/50 pb-6 gap-4">
           <div>
             <h1 className="text-4xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-green-500">
@@ -124,30 +143,21 @@ export default function Home() {
               User: <span className="text-yellow-500">{user.email}</span>
             </span>
             
-            {/* LINK TO LOGS */}
-            <a 
-              href="/logs"
-              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-green-400 text-sm font-bold rounded-lg border border-green-900/50 transition-all flex items-center gap-2"
-            >
+            <a href="/logs" className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-green-400 text-sm font-bold rounded-lg border border-green-900/50 transition-all flex items-center gap-2">
               View System Logs
             </a>
 
-            {/* STRIPE UPGRADE BUTTON EMBEDDED HERE */}
             <UpgradeButton userId={user.id} />
 
-            <button 
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 text-sm font-bold rounded-lg border border-red-900/30 transition-all"
-            >
+            <button onClick={handleLogout} className="px-4 py-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 text-sm font-bold rounded-lg border border-red-900/30 transition-all">
               Sign Out
             </button>
             <span className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/30 text-xs font-mono rounded-full tracking-widest shadow-[0_0_10px_rgba(34,197,94,0.2)]">
-              SYSTEM ONLINE
+              {user.is_pro ? 'PRO ACTIVE' : 'FREE TIER'}
             </span>
           </div>
         </div>
         
-        {/* AGENT GENERATOR INPUT */}
         <div className="space-y-4">
           <textarea
             className="w-full h-32 p-5 bg-gray-950 border border-green-900/30 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:outline-none text-gray-100 placeholder-gray-700 text-lg shadow-inner"
@@ -165,7 +175,6 @@ export default function Home() {
           </button>
         </div>
 
-        {/* GENERATED ARCHITECTURE RESULTS */}
         {blueprint && (
           <div className="space-y-6 pt-6 border-t border-green-900/50 mt-8">
             <div className="flex items-center justify-between">

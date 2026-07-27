@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 interface UpgradeButtonProps {
-  userId: string;
+  userId?: string;
 }
 
 export default function UpgradeButton({ userId }: UpgradeButtonProps) {
@@ -13,11 +14,24 @@ export default function UpgradeButton({ userId }: UpgradeButtonProps) {
     setLoading(true);
 
     try {
+      // Fallback: grab user ID directly from Supabase session if prop is missing
+      let activeUserId = userId;
+      if (!activeUserId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        activeUserId = session?.user?.id;
+      }
+
+      if (!activeUserId) {
+        alert('Authentication error: Please sign out and sign back in.');
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          userId,
+          userId: activeUserId,
           priceId: 'price_1TxbhN00WvSfpixtXwY5oFx1' 
         }),
       });
@@ -32,6 +46,7 @@ export default function UpgradeButton({ userId }: UpgradeButtonProps) {
       }
     } catch (err: any) {
       console.error(err);
+      alert('Checkout connection error.');
       setLoading(false);
     }
   };
@@ -40,7 +55,7 @@ export default function UpgradeButton({ userId }: UpgradeButtonProps) {
     <button 
       onClick={handleCheckout} 
       disabled={loading}
-      className="px-6 py-3 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
+      className="px-6 py-2 font-bold text-black bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-lg hover:from-yellow-400 hover:to-yellow-300 transition-all shadow-[0_0_10px_rgba(234,179,8,0.3)] disabled:opacity-50"
     >
       {loading ? 'Initializing...' : 'Upgrade to Pro - $49.99/mo'}
     </button>

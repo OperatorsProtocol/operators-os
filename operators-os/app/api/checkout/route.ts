@@ -7,7 +7,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: Request) {
   try {
-    const { userId, priceId } = await request.json();
+    const body = await request.json();
+    // Accept either userId or user_id to prevent any mismatch
+    const userId = body.userId || body.user_id;
+    const priceId = body.priceId || 'price_1TxbhN00WvSfpixtXwY5oFx1';
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
