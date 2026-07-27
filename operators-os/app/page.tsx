@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import UpgradeButton from '../components/UpgradeButton';
 
 interface Agent {
   agent_id: string;
@@ -26,15 +27,12 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   
-  // NEW: State to hold the logged-in user
   const [user, setUser] = useState<any>(null);
 
-  // NEW: Check for an active session when the page loads
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        // If they aren't logged in, kick them to the login screen
         window.location.href = '/login';
       } else {
         setUser(session.user);
@@ -88,7 +86,7 @@ export default function Home() {
           system_name: blueprint.system_name,
           architecture_type: blueprint.architecture_type,
           agents: blueprint.agents,
-          user_id: user.id // NEW: Tag the blueprint with the user's unique ID!
+          user_id: user.id 
         }
       ]);
 
@@ -96,50 +94,63 @@ export default function Home() {
       setSaveStatus(`Error: ${error.message}`);
       console.error(error);
     } else {
-      setSaveStatus('Blueprint saved permanently! 🚀');
+      setSaveStatus('Architecture secured permanently! 🚀');
     }
     setIsSaving(false);
   };
 
-  // NEW: Logout function
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
   };
 
-  if (!user) return <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">Loading Data Core...</div>;
+  if (!user) return <div className="min-h-screen bg-black text-green-500 flex items-center justify-center font-mono">Initializing Operators OS...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-8 font-sans">
-      <div className="max-w-5xl mx-auto space-y-8 mt-12">
+    <div className="min-h-screen bg-black text-white p-8 font-sans">
+      <div className="max-w-6xl mx-auto space-y-8 mt-6">
         
-        {/* UPDATED HEADER WITH USER INFO */}
-        <div className="flex items-center justify-between border-b border-gray-800 pb-6">
+        {/* TOP NAVIGATION & CONTROLS */}
+        <div className="flex flex-wrap items-center justify-between border-b border-green-900/50 pb-6 gap-4">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+            <h1 className="text-4xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 to-green-500">
               Operators OS
             </h1>
             <p className="text-gray-400 mt-1">Autonomous Agency Workforce Management</p>
           </div>
-          <div className="flex items-center gap-4">
+          
+          <div className="flex items-center gap-4 flex-wrap">
             <span className="text-sm text-gray-500 font-mono">
-              Logged in: <span className="text-blue-400">{user.email}</span>
+              User: <span className="text-yellow-500">{user.email}</span>
             </span>
+            
+            {/* LINK TO LOGS */}
+            <a 
+              href="/logs"
+              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-green-400 text-sm font-bold rounded-lg border border-green-900/50 transition-all flex items-center gap-2"
+            >
+              View System Logs
+            </a>
+
+            {/* STRIPE UPGRADE BUTTON EMBEDDED HERE */}
+            <UpgradeButton userId={user.id} />
+
             <button 
               onClick={handleLogout}
-              className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold rounded border border-gray-700 transition-all"
+              className="px-4 py-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 text-sm font-bold rounded-lg border border-red-900/30 transition-all"
             >
               Sign Out
             </button>
-            <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono rounded-full">
+            <span className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/30 text-xs font-mono rounded-full tracking-widest shadow-[0_0_10px_rgba(34,197,94,0.2)]">
               SYSTEM ONLINE
             </span>
           </div>
         </div>
         
+        {/* AGENT GENERATOR INPUT */}
         <div className="space-y-4">
           <textarea
-            className="w-full h-32 p-4 bg-gray-900 border border-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-100 placeholder-gray-600 text-base shadow-inner"
+            className="w-full h-32 p-5 bg-gray-950 border border-green-900/30 rounded-xl focus:ring-2 focus:ring-yellow-500 focus:outline-none text-gray-100 placeholder-gray-700 text-lg shadow-inner"
             placeholder="e.g., Build an automated workflow for a trade contractor handling inbound leads, estimating, and invoices..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -148,28 +159,29 @@ export default function Home() {
           <button
             onClick={generateBlueprint}
             disabled={loading}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50"
+            className="px-8 py-4 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black rounded-xl font-extrabold transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-50 text-lg uppercase tracking-wide"
           >
             {loading ? 'Designing Workforce...' : 'Deploy Digital Workforce'}
           </button>
         </div>
 
+        {/* GENERATED ARCHITECTURE RESULTS */}
         {blueprint && (
-          <div className="space-y-6 pt-6 border-t border-gray-800 mt-8">
+          <div className="space-y-6 pt-6 border-t border-green-900/50 mt-8">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-white">{blueprint.system_name}</h2>
-                <span className="text-xs text-gray-500 font-mono">{blueprint.architecture_type}</span>
+                <h2 className="text-3xl font-bold text-white">{blueprint.system_name}</h2>
+                <span className="text-sm text-yellow-500 font-mono tracking-widest uppercase">{blueprint.architecture_type}</span>
               </div>
               
               <div className="flex items-center gap-4">
-                <span className="text-sm text-emerald-400 font-mono">{saveStatus}</span>
+                <span className="text-sm text-green-400 font-mono">{saveStatus}</span>
                 <button
                   onClick={saveBlueprintToDb}
                   disabled={isSaving}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50"
+                  className="px-6 py-3 bg-green-600 hover:bg-green-500 text-black rounded-lg font-bold transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-50 uppercase tracking-wide"
                 >
-                  {isSaving ? 'Saving...' : 'Save Architecture'}
+                  {isSaving ? 'Securing...' : 'Save Architecture'}
                 </button>
               </div>
             </div>
@@ -178,35 +190,35 @@ export default function Home() {
               {blueprint.agents.map((agent) => (
                 <div 
                   key={agent.agent_id} 
-                  className={`p-6 bg-gray-900 border rounded-2xl transition-all ${
-                    activeAgents[agent.agent_id] ? 'border-blue-500/50 shadow-lg shadow-blue-950/20' : 'border-gray-800 opacity-60'
+                  className={`p-6 bg-gray-950 border rounded-2xl transition-all ${
+                    activeAgents[agent.agent_id] ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-gray-800 opacity-50'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <span className="text-xs font-mono text-blue-400 font-semibold">{agent.agent_id}</span>
-                      <h3 className="text-xl font-bold text-gray-100">{agent.name}</h3>
+                      <span className="text-xs font-mono text-yellow-500 font-semibold">{agent.agent_id}</span>
+                      <h3 className="text-2xl font-bold text-gray-100 mt-1">{agent.name}</h3>
                     </div>
                     <button
                       onClick={() => toggleAgent(agent.agent_id)}
                       className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
                         activeAgents[agent.agent_id] 
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                          : 'bg-gray-800 text-gray-400 border border-gray-700'
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                          : 'bg-gray-900 text-gray-500 border border-gray-800'
                       }`}
                     >
-                      {activeAgents[agent.agent_id] ? 'ACTIVE' : 'PAUSED'}
+                      {activeAgents[agent.agent_id] ? 'ACTIVE' : 'STANDBY'}
                     </button>
                   </div>
 
-                  <p className="text-sm text-gray-400 mb-4">{agent.role}</p>
+                  <p className="text-sm text-gray-400 mb-5 leading-relaxed">{agent.role}</p>
 
-                  <div className="space-y-3 pt-3 border-t border-gray-800">
+                  <div className="space-y-4 pt-4 border-t border-gray-900">
                     <div>
-                      <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Integrated Tools:</span>
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <span className="text-xs text-gray-600 uppercase tracking-widest font-bold">Integrated Tools:</span>
+                      <div className="flex flex-wrap gap-2 mt-2">
                         {agent.tools.map((tool, idx) => (
-                          <span key={idx} className="px-2 py-0.5 bg-gray-800 text-gray-300 rounded text-xs border border-gray-700">
+                          <span key={idx} className="px-3 py-1 bg-black text-yellow-500/80 rounded border border-yellow-900/30 text-xs font-mono">
                             {tool}
                           </span>
                         ))}
@@ -214,8 +226,8 @@ export default function Home() {
                     </div>
 
                     <div>
-                      <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Primary Output:</span>
-                      <p className="text-xs text-emerald-400 font-mono mt-0.5">{agent.outputs}</p>
+                      <span className="text-xs text-gray-600 uppercase tracking-widest font-bold">Primary Output:</span>
+                      <p className="text-sm text-green-500 font-mono mt-1 bg-black p-2 rounded border border-green-900/30">{agent.outputs}</p>
                     </div>
                   </div>
                 </div>

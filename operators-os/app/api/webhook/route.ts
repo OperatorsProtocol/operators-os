@@ -3,7 +3,6 @@ import { supabase } from '../../../lib/supabase';
 
 export async function POST(request: Request) {
   try {
-    // 1. Parse incoming payload containing user_id and context
     const payload = await request.json();
     const { user_id, event_type, customer_name, phone, message } = payload;
 
@@ -14,9 +13,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Fetch the user's latest saved agent blueprint from Supabase
     const { data: savedBlueprint, error: dbError } = await supabase
-      .from('architectures')
+      .from('blueprints')
       .select('*')
       .eq('user_id', user_id)
       .order('created_at', { ascending: false })
@@ -30,16 +28,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const blueprintData = savedBlueprint.blueprint;
+    let blueprintData = savedBlueprint.blueprint;
+    if (typeof blueprintData === 'string') {
+      try { blueprintData = JSON.parse(blueprintData); } catch (e) { blueprintData = {}; }
+    }
 
-    // 3. Build a dynamic prompt using the specific agent roster saved in DB
-    const agentRoster = blueprintData.agents?.map((a: any) => 
-      `- ${a.name} (${a.role}): Primary Output -> ${a.primary_output}`
-    ).join('\n') || 'Generic Workforce Agent';
+    const agentsList = blueprintData?.agents || blueprintData?.blueprint?.agents || [];
+
+    const agentRoster = agentsList.length > 0 
+      ? agentsList.map((a: any) => `- ${a.name || 'Agent'} (${a.role || 'Role'}): Primary Output -> ${a.primary_output || 'N/A'}`).join('\n')
+      : '- Generic Workforce Agent (Handles general intake)';
+
+    const systemName = blueprintData?.system_name || savedBlueprint.system_name || 'Operators OS Network';
+    const architectureType = blueprintData?.architecture_type || 'B2B Automation';
 
     const agentPrompt = `
-      You are running the digital workforce system: "${blueprintData.system_name}".
-      Architecture Type: ${blueprintData.architecture_type}
+      You are running the digital workforce system: "${systemName}".
+      Architecture Type: ${architectureType}
 
       ACTIVE AGENT ROSTER:
       ${agentRoster}
@@ -55,7 +60,6 @@ export async function POST(request: Request) {
       Generate a structured operational response detailing how the assigned agent processes this request and what output/communication is generated.
     `;
 
-    // 4. Send the dynamic payload to Gemini 3.6 Flash
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiApiKey}`,
@@ -69,9 +73,12 @@ export async function POST(request: Request) {
     );
 
     const geminiData = await geminiRes.json();
-    const agentOutput = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
+    
+    // Print raw response to terminal for debugging
+    console.log("GEMINI RAW RESPONSE:", JSON.stringify(geminiData, null, 2));
 
-    // 5. Log execution to Supabase
+    const agentOutput = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(geminiData);
+
     await supabase
       .from('agent_logs')
       .insert([
@@ -85,7 +92,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      system_executed: blueprintData.system_name,
+      system_executed: systemName,
       agent_output: agentOutput
     });
 
