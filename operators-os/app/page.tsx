@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../lib/supabase';
 import UpgradeButton from '../components/UpgradeButton';
 
@@ -10,6 +12,7 @@ interface Agent {
   role: string;
   tools: string[];
   outputs: string;
+  primary_output?: string;
 }
 
 interface Blueprint {
@@ -19,6 +22,7 @@ interface Blueprint {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [prompt, setPrompt] = useState('');
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,25 +35,32 @@ export default function Home() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        window.location.href = '/login';
-      } else {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_pro')
-          .eq('id', session.user.id)
-          .single();
-          
-        setUser({ ...session.user, is_pro: profile?.is_pro || false });
-      }
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session) {
+        router.push('/login');
+        return;
+      } 
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_pro')
+        .eq('id', session.user.id)
+        .single();
+        
+      setUser({ ...session.user, is_pro: profile?.is_pro || false });
     };
+    
     checkUser();
-  }, []);
+  }, [router]);
 
   // EVERYONE can generate a blueprint (The Hook)
   const generateBlueprint = async () => {
-    if (!prompt) return;
+    if (!prompt.trim()) {
+      alert("Please enter a description or task for your workforce in the text box first!");
+      return;
+    }
+    
     setLoading(true);
     setBlueprint(null);
     setSaveStatus('');
@@ -62,17 +73,21 @@ export default function Home() {
       });
       
       const data = await res.json();
-      if (data.result) {
+      
+      if (res.ok && data.result) {
         setBlueprint(data.result);
         const initialStatus: { [key: string]: boolean } = {};
         data.result.agents.forEach((a: Agent) => {
-          // Default them to false so the user has to click to activate
           initialStatus[a.agent_id] = false; 
         });
         setActiveAgents(initialStatus);
+      } else {
+        alert(`API Error: ${data.error || 'Failed to generate blueprint.'}`);
+        console.error("API response:", data);
       }
     } catch (error) {
       console.error('Error generating blueprint:', error);
+      alert('Network error. Failed to reach the architect API.');
     }
     
     setLoading(false);
@@ -87,7 +102,7 @@ export default function Home() {
     setActiveAgents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // ONLY PRO USERS can save architectures
+  // ONLY PRO USERS can save architectures & agents
   const saveBlueprintToDb = async () => {
     if (!blueprint || !user) return;
     
@@ -97,9 +112,10 @@ export default function Home() {
     }
 
     setIsSaving(true);
-    setSaveStatus('Saving to database...');
+    setSaveStatus('Deploying Workforce...');
 
-    const { error } = await supabase
+    // 1. Save the Master Blueprint (The Backup)
+    const { error: blueprintError } = await supabase
       .from('blueprints')
       .insert([
         {
@@ -110,18 +126,39 @@ export default function Home() {
         }
       ]);
 
-    if (error) {
-      setSaveStatus(`Error: ${error.message}`);
-      console.error(error);
-    } else {
-      setSaveStatus('Architecture secured permanently! 🚀');
+    if (blueprintError) {
+      setSaveStatus(`Blueprint Error: ${blueprintError.message}`);
+      console.error("Blueprint Error:", blueprintError);
+      setIsSaving(false);
+      return;
     }
+
+    // 2. Format the individual agents to be written to the 'agents' table
+    const agentsToInsert = blueprint.agents.map((agent) => ({
+      user_id: user.id, // Hooks it to the logged-in agency
+      name: agent.name,
+      role: agent.role,
+      system_prompt: `You are ${agent.name}. Your role is ${agent.role}. Your primary objective is: ${agent.outputs || agent.primary_output}. You have access to these tools: ${agent.tools.join(', ')}.`
+    }));
+
+    // 3. Insert them into the Agent Command 'agents' table
+    const { error: agentsError } = await supabase
+      .from('agents')
+      .insert(agentsToInsert);
+
+    if (agentsError) {
+      setSaveStatus(`Agent DB Error: ${agentsError.message}`);
+      console.error("Agent DB Error:", agentsError);
+    } else {
+      setSaveStatus('Workforce Deployed & Saved! 🚀');
+    }
+    
     setIsSaving(false);
   };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    router.push('/login');
   };
 
   if (!user) return <div className="min-h-screen bg-black text-green-500 flex items-center justify-center font-mono">Initializing Operators OS...</div>;
@@ -143,18 +180,27 @@ export default function Home() {
               User: <span className="text-yellow-500">{user.email}</span>
             </span>
             
+            {/* Agent Command Dashboard Link */}
+            <Link 
+              href="/dashboard" 
+              className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-yellow-400 text-sm font-bold rounded-lg border border-yellow-900/50 transition-all flex items-center gap-2"
+            >
+              Agent Command
+            </Link>
+
             <a href="/logs" className="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-green-400 text-sm font-bold rounded-lg border border-green-900/50 transition-all flex items-center gap-2">
               View System Logs
             </a>
 
             <UpgradeButton userId={user.id} />
 
-            <button onClick={handleLogout} className="px-4 py-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 text-sm font-bold rounded-lg border border-red-900/30 transition-all">
+            <button onClick={handleLogout} className="px-4 py-2 bg-red-950/30 hover:bg-red-900/50 text-red-400 text-sm font-bold rounded-lg border border-red-900/30 transition-all cursor-pointer">
               Sign Out
             </button>
             <span className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/30 text-xs font-mono rounded-full tracking-widest shadow-[0_0_10px_rgba(34,197,94,0.2)]">
               {user.is_pro ? 'PRO ACTIVE' : 'FREE TIER'}
             </span>
+
           </div>
         </div>
         
@@ -169,7 +215,7 @@ export default function Home() {
           <button
             onClick={generateBlueprint}
             disabled={loading}
-            className="px-8 py-4 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black rounded-xl font-extrabold transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-50 text-lg uppercase tracking-wide"
+            className="px-8 py-4 bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400 text-black rounded-xl font-extrabold transition-all shadow-[0_0_15px_rgba(234,179,8,0.3)] disabled:opacity-50 text-lg uppercase tracking-wide cursor-pointer inline-block"
           >
             {loading ? 'Designing Workforce...' : 'Deploy Digital Workforce'}
           </button>
@@ -188,7 +234,7 @@ export default function Home() {
                 <button
                   onClick={saveBlueprintToDb}
                   disabled={isSaving}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-500 text-black rounded-lg font-bold transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-50 uppercase tracking-wide"
+                  className="px-6 py-3 bg-green-600 hover:bg-green-500 text-black rounded-lg font-bold transition-all shadow-[0_0_15px_rgba(34,197,94,0.3)] disabled:opacity-50 uppercase tracking-wide cursor-pointer"
                 >
                   {isSaving ? 'Securing...' : 'Save Architecture'}
                 </button>
@@ -210,7 +256,7 @@ export default function Home() {
                     </div>
                     <button
                       onClick={() => toggleAgent(agent.agent_id)}
-                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                         activeAgents[agent.agent_id] 
                           ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
                           : 'bg-gray-900 text-gray-500 border border-gray-800'
@@ -236,7 +282,9 @@ export default function Home() {
 
                     <div>
                       <span className="text-xs text-gray-600 uppercase tracking-widest font-bold">Primary Output:</span>
-                      <p className="text-sm text-green-500 font-mono mt-1 bg-black p-2 rounded border border-green-900/30">{agent.outputs}</p>
+                      <p className="text-sm text-green-500 font-mono mt-1 bg-black p-2 rounded border border-green-900/30">
+                        {agent.outputs || agent.primary_output}
+                      </p>
                     </div>
                   </div>
                 </div>
