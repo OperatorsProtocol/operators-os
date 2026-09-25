@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
-
 export async function POST(req: Request) {
   try {
+    // 1. Initialize inside the handler to prevent Vercel build crashes
+    const resend = new Resend(process.env.RESEND_API_KEY || 're_placeholder');
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
+
     const { taskPrompt, recipientEmail, clientName } = await req.json();
 
     if (!recipientEmail || !taskPrompt) {
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Ask Gemini to structure the email output as clean JSON using gemini-3.6-flash
+    // 2. Ask Gemini to structure the email output as clean JSON
     const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
     const aiPrompt = `
       You are an AI growth workforce agent. 
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
     }
     const { subject, body } = JSON.parse(jsonMatch[0]);
 
-    // 2. Dispatch the email via Resend
+    // 3. Dispatch the email via Resend
     const emailData = await resend.emails.send({
       from: 'Operators OS <onboarding@resend.dev>', // Default Resend test domain
       to: [recipientEmail],
