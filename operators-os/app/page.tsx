@@ -133,11 +133,14 @@ export default function Home() {
       return;
     }
 
-    // 2. Format the individual agents to be written to the 'agents' table
+    // 2. Format the individual agents with batch_name, tools, and primary_output
     const agentsToInsert = blueprint.agents.map((agent) => ({
-      user_id: user.id, // Hooks it to the logged-in agency
+      user_id: user.id, 
       name: agent.name,
       role: agent.role,
+      batch_name: blueprint.system_name, // Saves the generated title (e.g. SparkOps Electrical Management System)
+      tools: agent.tools,                // Passes the tools array for the dashboard cards
+      primary_output: agent.outputs || agent.primary_output, // Passes primary output
       system_prompt: `You are ${agent.name}. Your role is ${agent.role}. Your primary objective is: ${agent.outputs || agent.primary_output}. You have access to these tools: ${agent.tools.join(', ')}.`
     }));
 
